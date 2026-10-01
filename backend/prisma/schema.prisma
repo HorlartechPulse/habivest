@@ -1,0 +1,433 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  TENANT
+  PROPERTY_SEEKER
+  LANDLORD
+  PROPERTY_OWNER
+  PROPERTY_MANAGER
+  AGENT
+  MAINTENANCE_PROVIDER
+  ADMIN
+  SUPER_ADMIN
+  FINANCE
+  SUPPORT
+  ANALYST
+}
+
+enum ListingStatus {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  PAUSED
+  RENTED
+  UNAVAILABLE
+  REJECTED
+  ARCHIVED
+}
+
+enum ListingType {
+  FOR_RENT
+  FOR_SALE
+  SHORT_LET
+}
+
+enum UnitStatus {
+  AVAILABLE
+  RESERVED
+  OCCUPIED
+  MAINTENANCE
+  UNAVAILABLE
+}
+
+enum ApplicationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  MORE_INFORMATION_REQUIRED
+  APPROVED
+  REJECTED
+  WITHDRAWN
+  EXPIRED
+}
+
+enum LeaseStatus {
+  DRAFT
+  PENDING_SIGNATURE
+  ACTIVE
+  EXPIRING
+  EXPIRED
+  TERMINATED
+}
+
+enum RentScheduleStatus {
+  UPCOMING
+  DUE
+  OVERDUE
+  PAID
+  PARTIALLY_PAID
+  WAIVED
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  SUCCESS
+  FAILED
+  CANCELLED
+  REFUNDED
+  REVERSED
+}
+
+enum MaintenanceStatus {
+  OPEN
+  ACKNOWLEDGED
+  ASSIGNED
+  IN_PROGRESS
+  WAITING_FOR_PARTS
+  COMPLETED
+  CANCELLED
+}
+
+enum ViewingStatus {
+  REQUESTED
+  CONFIRMED
+  RESCHEDULED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String
+  firstName     String
+  lastName      String
+  phone         String?
+  role          Role     @default(PROPERTY_SEEKER)
+  isActive      Boolean  @default(true)
+  emailVerified Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  propertiesOwned Property[] @relation("PropertyOwner")
+  applications    RentalApplication[]
+  leasesAsTenant  Lease[] @relation("LeaseTenant")
+  favorites       FavoriteProperty[]
+  inquiries       PropertyInquiry[]
+  viewings        Viewing[]
+  payments        RentPayment[]
+  maintenance     MaintenanceRequest[]
+  messages        Message[]
+  notifications   Notification[]
+  auditLogs       AuditLog[]
+
+  @@index([email])
+  @@index([role])
+}
+
+model Amenity {
+  id         String            @id @default(cuid())
+  name       String            @unique
+  icon       String?
+  properties PropertyAmenity[]
+}
+
+model Property {
+  id            String        @id @default(cuid())
+  ownerId       String
+  owner         User          @relation("PropertyOwner", fields: [ownerId], references: [id])
+  title         String
+  slug          String        @unique
+  description   String        @db.Text
+  propertyType  String
+  listingType   ListingType   @default(FOR_RENT)
+  status        ListingStatus @default(DRAFT)
+  // Address
+  country       String        @default("Nigeria")
+  state         String?
+  city          String
+  district      String?
+  street        String?
+  hideExactAddress Boolean    @default(false)
+  latitude      Decimal?      @db.Decimal(10, 7)
+  longitude     Decimal?      @db.Decimal(10, 7)
+  // Specs
+  bedrooms      Int           @default(1)
+  bathrooms     Int           @default(1)
+  areaSqm       Decimal?      @db.Decimal(10, 2)
+  furnished     Boolean       @default(false)
+  // Pricing (annual rent typical in NG market demos)
+  rentAmount    Decimal       @db.Decimal(14, 2)
+  depositAmount Decimal?      @db.Decimal(14, 2)
+  currency      String        @default("NGN")
+  availableFrom DateTime?
+  coverImageUrl String? @db.VarChar(500)
+  imageUrls     Json?
+  viewCount     Int           @default(0)
+  isVerified    Boolean       @default(false)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  amenities    PropertyAmenity[]
+  units        PropertyUnit[]
+  favorites    FavoriteProperty[]
+  inquiries    PropertyInquiry[]
+  viewings     Viewing[]
+  applications RentalApplication[]
+  leases       Lease[]
+  maintenance  MaintenanceRequest[]
+
+  @@index([status, city])
+  @@index([propertyType])
+  @@index([rentAmount])
+  @@index([createdAt])
+}
+
+model PropertyAmenity {
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  amenityId  String
+  amenity    Amenity  @relation(fields: [amenityId], references: [id])
+
+  @@id([propertyId, amenityId])
+}
+
+model PropertyUnit {
+  id          String     @id @default(cuid())
+  propertyId  String
+  property    Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  label       String
+  floor       String?
+  bedrooms    Int?
+  bathrooms   Int?
+  areaSqm     Decimal?   @db.Decimal(10, 2)
+  rentAmount  Decimal?   @db.Decimal(14, 2)
+  status      UnitStatus @default(AVAILABLE)
+  applications RentalApplication[]
+  leases      Lease[]
+  maintenance MaintenanceRequest[]
+}
+
+model FavoriteProperty {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, propertyId])
+}
+
+model PropertyInquiry {
+  id         String   @id @default(cuid())
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id])
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  message    String
+  status     String   @default("NEW")
+  createdAt  DateTime @default(now())
+}
+
+model Viewing {
+  id          String        @id @default(cuid())
+  propertyId  String
+  property    Property      @relation(fields: [propertyId], references: [id])
+  userId      String
+  user        User          @relation(fields: [userId], references: [id])
+  scheduledAt DateTime
+  notes       String?
+  status      ViewingStatus @default(REQUESTED)
+  createdAt   DateTime      @default(now())
+
+  @@index([propertyId, scheduledAt])
+}
+
+model RentalApplication {
+  id          String            @id @default(cuid())
+  propertyId  String
+  property    Property          @relation(fields: [propertyId], references: [id])
+  unitId      String?
+  unit        PropertyUnit?     @relation(fields: [unitId], references: [id])
+  applicantId String
+  applicant   User              @relation(fields: [applicantId], references: [id])
+  moveInDate  DateTime?
+  message     String?
+  employment  String?
+  incomeInfo  String?
+  status      ApplicationStatus @default(SUBMITTED)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  statusHistory ApplicationStatusHistory[]
+  notes         ApplicationNote[]
+  leases        Lease[]
+
+  @@index([propertyId, status])
+  @@index([applicantId])
+}
+
+model ApplicationStatusHistory {
+  id            String            @id @default(cuid())
+  applicationId String
+  application   RentalApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  fromStatus    ApplicationStatus?
+  toStatus      ApplicationStatus
+  changedById   String?
+  note          String?
+  createdAt     DateTime          @default(now())
+}
+
+model ApplicationNote {
+  id            String            @id @default(cuid())
+  applicationId String
+  application   RentalApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  authorId      String
+  body          String
+  createdAt     DateTime          @default(now())
+}
+
+model Lease {
+  id           String      @id @default(cuid())
+  propertyId   String
+  property     Property    @relation(fields: [propertyId], references: [id])
+  unitId       String?
+  unit         PropertyUnit? @relation(fields: [unitId], references: [id])
+  tenantId     String
+  tenant       User        @relation("LeaseTenant", fields: [tenantId], references: [id])
+  applicationId String?
+  application  RentalApplication? @relation(fields: [applicationId], references: [id])
+  startDate    DateTime
+  endDate      DateTime
+  rentAmount   Decimal     @db.Decimal(14, 2)
+  depositAmount Decimal?   @db.Decimal(14, 2)
+  currency     String      @default("NGN")
+  frequency    String      @default("ANNUAL") // MONTHLY ANNUAL
+  status       LeaseStatus @default(DRAFT)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  schedules RentSchedule[]
+  payments  RentPayment[]
+  ledger    RentLedgerEntry[]
+
+  @@index([tenantId, status])
+  @@index([propertyId])
+}
+
+model RentSchedule {
+  id       String             @id @default(cuid())
+  leaseId  String
+  lease    Lease              @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+  dueDate  DateTime
+  amount   Decimal            @db.Decimal(14, 2)
+  status   RentScheduleStatus @default(UPCOMING)
+  paidAt   DateTime?
+
+  @@index([dueDate, status])
+}
+
+model RentPayment {
+  id          String        @id @default(cuid())
+  leaseId     String
+  lease       Lease         @relation(fields: [leaseId], references: [id])
+  tenantId    String
+  tenant      User          @relation(fields: [tenantId], references: [id])
+  amount      Decimal       @db.Decimal(14, 2)
+  currency    String        @default("NGN")
+  reference   String        @unique
+  provider    String        @default("mock")
+  providerRef String?
+  status      PaymentStatus @default(PENDING)
+  paidAt      DateTime?
+  createdAt   DateTime      @default(now())
+
+  @@index([status])
+}
+
+model RentLedgerEntry {
+  id        String   @id @default(cuid())
+  leaseId   String
+  lease     Lease    @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+  entryType String   // DEBIT CREDIT
+  amount    Decimal  @db.Decimal(14, 2)
+  currency  String   @default("NGN")
+  memo      String?
+  createdAt DateTime @default(now())
+}
+
+model MaintenanceRequest {
+  id          String            @id @default(cuid())
+  propertyId  String
+  property    Property          @relation(fields: [propertyId], references: [id])
+  unitId      String?
+  unit        PropertyUnit?     @relation(fields: [unitId], references: [id])
+  tenantId    String
+  tenant      User              @relation(fields: [tenantId], references: [id])
+  title       String
+  description String
+  priority    String            @default("MEDIUM")
+  category    String?
+  status      MaintenanceStatus @default(OPEN)
+  estimatedCost Decimal?        @db.Decimal(14, 2)
+  actualCost  Decimal?          @db.Decimal(14, 2)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  senderId  String
+  sender    User     @relation(fields: [senderId], references: [id])
+  receiverId String
+  body      String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([senderId, receiverId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String
+  type      String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String
+  resource   String
+  resourceId String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+}
+
+model AnalyticsEvent {
+  id        String   @id @default(cuid())
+  type      String
+  entityId  String?
+  userId    String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([type, createdAt])
+}

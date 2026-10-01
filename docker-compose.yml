@@ -1,0 +1,21 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: habivest
+      MYSQL_USER: habivest
+      MYSQL_PASSWORD: habivest
+    ports:
+      - "3310:3306"
+    volumes:
+      - habivest_mysql:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uhabivest", "-phabivest"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  habivest_mysql:
