@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
@@ -23,7 +23,7 @@ type Property = {
 const FALLBACK =
   "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=800&q=80";
 
-export default function PropertiesPage() {
+function PropertiesContent() {
   const searchParams = useSearchParams();
   const [items, setItems] = useState<Property[]>([]);
   const [city, setCity] = useState(searchParams.get("city") || "");
@@ -105,5 +105,19 @@ export default function PropertiesPage() {
         <p className="mt-8 text-sm text-muted">No listings. Start the API and run the seed.</p>
       )}
     </main>
+  );
+}
+
+export default function PropertiesPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="mx-auto max-w-6xl px-4 py-10">
+          <p className="text-sm text-muted">Loading properties...</p>
+        </main>
+      }
+    >
+      <PropertiesContent />
+    </Suspense>
   );
 }
